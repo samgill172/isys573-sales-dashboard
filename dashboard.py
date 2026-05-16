@@ -113,6 +113,37 @@ def build_category_pie(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+
+def build_channel_bar(df: pd.DataFrame) -> go.Figure:
+    """Revenue by sales channel — vertical bar chart."""
+    channel = (
+        df.groupby("channel")["revenue"]
+        .sum()
+        .reset_index()
+        .sort_values("revenue", ascending=False)
+    )
+    fig = px.bar(
+        channel, x="channel", y="revenue",
+        color="channel",
+        color_discrete_map={
+            "In-Store": "#2196F3",
+            "Online": "#4CAF50",
+            "Wholesale": "#FF9800",
+        },
+        labels={"revenue": "Revenue ($)", "channel": "Sales Channel"},
+        title="Revenue by Sales Channel",
+    )
+    fig.update_layout(
+        plot_bgcolor="white",
+        yaxis=dict(tickprefix="$", tickformat=",.0f"),
+        showlegend=False,
+        margin=dict(t=50, b=30),
+    )
+    fig.update_traces(
+        hovertemplate="<b>%{x}</b><br>Revenue: $%{y:,.0f}<extra></extra>"
+    )
+    return fig
+
 def build_top_products(df: pd.DataFrame, n: int = 10) -> go.Figure:
     """Top N products by revenue — horizontal bar chart."""
     top = (
@@ -174,6 +205,7 @@ def build_html(df: pd.DataFrame) -> str:
                 "monthly": empty.to_json(),
                 "category": empty.to_json(),
                 "top_products": empty.to_json(),
+                "channel":      empty.to_json(),
                 "total_revenue": "$0",
                 "total_orders": "0",
                 "avg_order": "$0",
@@ -194,6 +226,7 @@ def build_html(df: pd.DataFrame) -> str:
             "monthly":      build_monthly_line(subset).to_json(),
             "category":     build_category_pie(subset).to_json(),
             "top_products": build_top_products(subset).to_json(),
+            "channel":      build_channel_bar(subset).to_json(),
             "total_revenue": f"${total_rev:,.0f}",
             "total_orders":  f"{total_orders:,}",
             "avg_order":     f"${avg_order:,.0f}",
@@ -210,7 +243,7 @@ def build_html(df: pd.DataFrame) -> str:
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>ISYS 573 · Retail Sales Dashboard</title>
-  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-3.0.0.min.js"></script>
   <style>
     *{{box-sizing:border-box;margin:0;padding:0;}}
     body{{font-family:'Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#1a1a2e;}}
@@ -264,6 +297,7 @@ def build_html(df: pd.DataFrame) -> str:
   <div class="chart-card"><div id="chartMonthly" style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartCategory"    style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartTopProducts" style="height:340px;"></div></div>
+  <div class="chart-card"><div id="chartChannel" style="height:340px;"></div></div>
 </div>
 
 <footer>
@@ -298,6 +332,7 @@ function applyFilter(quarter) {{
   Plotly.react("chartMonthly",     JSON.parse(d.monthly).data,     JSON.parse(d.monthly).layout,     {{responsive:true}});
   Plotly.react("chartCategory",    JSON.parse(d.category).data,    JSON.parse(d.category).layout,    {{responsive:true}});
   Plotly.react("chartTopProducts", JSON.parse(d.top_products).data, JSON.parse(d.top_products).layout, {{responsive:true}});
+  Plotly.react("chartChannel",     JSON.parse(d.channel).data,      JSON.parse(d.channel).layout,      {{responsive:true}});
 
   document.getElementById("filterLabel").textContent =
     quarter === "Full Year" ? "Showing all 2024 data" : `Showing ${{quarter}} 2024 only`;
