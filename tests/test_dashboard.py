@@ -55,11 +55,10 @@ class TestRegionChart:
     def test_returns_figure(self, df):
         fig = build_region_bar(df)
         assert fig is not None
-
     def test_has_four_bars(self, df):
         fig = build_region_bar(df)
-        # px.bar with color creates one trace per region
-        assert len(fig.data) == 4
+        # go.Bar creates one trace; the four regions are in fig.data[0].y
+        assert len(fig.data[0].y) == 4
 
     def test_filtered_by_quarter(self, df):
         q1 = df[df["quarter"] == "Q1"]
