@@ -11,7 +11,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dashboard import load_data, build_region_bar, build_monthly_line, \
-                      build_category_pie, build_top_products
+                      build_category_pie, build_top_products, \
+                      build_sales_rep_leaderboard
 
 DATA_PATH = Path(__file__).parent.parent / "data" / "sales.csv"
 
@@ -27,7 +28,8 @@ class TestLoadData:
 
     def test_required_columns_present(self, df):
         required = {"date", "region", "category", "product",
-                    "units_sold", "unit_price", "revenue", "channel"}
+                    "units_sold", "unit_price", "revenue", "channel",
+                    "sales_rep"}
         assert required.issubset(set(df.columns))
 
     def test_date_parsed_as_datetime(self, df):
@@ -58,8 +60,7 @@ class TestRegionChart:
 
     def test_has_four_bars(self, df):
         fig = build_region_bar(df)
-        # px.bar with color creates one trace per region
-        assert len(fig.data) == 4
+        assert len(fig.data[0].y) == 4
 
     def test_filtered_by_quarter(self, df):
         q1 = df[df["quarter"] == "Q1"]
@@ -109,3 +110,28 @@ class TestTopProducts:
         fig = build_top_products(df)
         revenues = list(fig.data[0].x)
         assert revenues == sorted(revenues)
+
+
+class TestSalesRepLeaderboard:
+    def test_returns_figure(self, df):
+        fig = build_sales_rep_leaderboard(df)
+        assert fig is not None
+
+    def test_top_sales_reps_default_to_ten(self, df):
+        expected = min(df["sales_rep"].nunique(), 10)
+        fig = build_sales_rep_leaderboard(df)
+        assert len(fig.data[0].y) == expected
+
+    def test_custom_n(self, df):
+        fig = build_sales_rep_leaderboard(df, n=5)
+        assert len(fig.data[0].y) == 5
+
+    def test_sorted_ascending_for_horizontal_bar(self, df):
+        fig = build_sales_rep_leaderboard(df)
+        revenues = list(fig.data[0].x)
+        assert revenues == sorted(revenues)
+
+    def test_filtered_by_quarter(self, df):
+        q1 = df[df["quarter"] == "Q1"]
+        fig = build_sales_rep_leaderboard(q1)
+        assert len(fig.data[0].x) <= len(df["sales_rep"].unique())

@@ -33,7 +33,8 @@ def load_data(path: Path = DATA_PATH) -> pd.DataFrame:
         raise FileNotFoundError(f"Sales data not found: {path}")
     df = pd.read_csv(path, parse_dates=["date"])
     required = {"date", "region", "category", "product",
-                "units_sold", "unit_price", "revenue", "channel"}
+                "units_sold", "unit_price", "revenue", "channel",
+                "sales_rep"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Missing columns: {missing}")
@@ -142,6 +143,35 @@ def build_top_products(df: pd.DataFrame, n: int = 10) -> go.Figure:
     return fig
 
 
+def build_sales_rep_leaderboard(df: pd.DataFrame, n: int = 10) -> go.Figure:
+    """Top N sales reps by revenue — horizontal leaderboard chart."""
+    reps = (
+        df.groupby("sales_rep")["revenue"]
+        .sum()
+        .nlargest(n)
+        .reset_index()
+        .sort_values("revenue")
+    )
+    fig = px.bar(
+        reps, x="revenue", y="sales_rep",
+        orientation="h",
+        color="revenue",
+        color_continuous_scale="Viridis",
+        labels={"revenue": "Revenue ($)", "sales_rep": "Sales Rep"},
+        title=f"Top {n} Sales Reps by Revenue",
+    )
+    fig.update_layout(
+        coloraxis_showscale=False,
+        plot_bgcolor="white",
+        xaxis=dict(tickprefix="$", tickformat=",.0f"),
+        margin=dict(t=50, b=30)
+    )
+    fig.update_traces(
+        hovertemplate="<b>%{y}</b><br>Revenue: $%{x:,.0f}<extra></extra>"
+    )
+    return fig
+
+
 def kpi_card_html(label: str, value: str, color: str = "#2196F3") -> str:
     """Render a single KPI card as HTML."""
     return f"""
@@ -174,6 +204,7 @@ def build_html(df: pd.DataFrame) -> str:
                 "monthly": empty.to_json(),
                 "category": empty.to_json(),
                 "top_products": empty.to_json(),
+                "sales_rep": empty.to_json(),
                 "total_revenue": "$0",
                 "total_orders": "0",
                 "avg_order": "$0",
@@ -194,6 +225,7 @@ def build_html(df: pd.DataFrame) -> str:
             "monthly":      build_monthly_line(subset).to_json(),
             "category":     build_category_pie(subset).to_json(),
             "top_products": build_top_products(subset).to_json(),
+            "sales_rep":    build_sales_rep_leaderboard(subset).to_json(),
             "total_revenue": f"${total_rev:,.0f}",
             "total_orders":  f"{total_orders:,}",
             "avg_order":     f"${avg_order:,.0f}",
@@ -264,11 +296,7 @@ def build_html(df: pd.DataFrame) -> str:
   <div class="chart-card"><div id="chartMonthly" style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartCategory"    style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartTopProducts" style="height:340px;"></div></div>
-</div>
-
-<footer>
-  Built with Python · Pandas · Plotly &nbsp;|&nbsp;
-  ISYS 573 AugOps Demo &nbsp;|&nbsp;
+  <div class="chart-card"><div id="chartSalesRep" style="height:340px;"></div></div>
   github.com/[your-handle]/isys573-sales-dashboard
 </footer>
 
@@ -298,6 +326,7 @@ function applyFilter(quarter) {{
   Plotly.react("chartMonthly",     JSON.parse(d.monthly).data,     JSON.parse(d.monthly).layout,     {{responsive:true}});
   Plotly.react("chartCategory",    JSON.parse(d.category).data,    JSON.parse(d.category).layout,    {{responsive:true}});
   Plotly.react("chartTopProducts", JSON.parse(d.top_products).data, JSON.parse(d.top_products).layout, {{responsive:true}});
+  Plotly.react("chartSalesRep",    JSON.parse(d.sales_rep).data,    JSON.parse(d.sales_rep).layout,    {{responsive:true}});
 
   document.getElementById("filterLabel").textContent =
     quarter === "Full Year" ? "Showing all 2024 data" : `Showing ${{quarter}} 2024 only`;
