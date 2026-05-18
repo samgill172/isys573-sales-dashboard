@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dashboard import load_data, build_region_bar, build_monthly_line, \
-                      build_category_pie, build_top_products
+                      build_category_pie, build_top_products, build_rep_leaderboard
 
 DATA_PATH = Path(__file__).parent.parent / "data" / "sales.csv"
 
@@ -106,5 +106,23 @@ class TestTopProducts:
 
     def test_sorted_ascending_for_horizontal_bar(self, df):
         fig = build_top_products(df)
+        revenues = list(fig.data[0].x)
+        assert revenues == sorted(revenues)
+
+class TestRepLeaderboard:
+    def test_returns_figure(self, df):
+        fig = build_rep_leaderboard(df)
+        assert fig is not None
+
+    def test_default_top_10(self, df):
+        fig = build_rep_leaderboard(df)
+        assert len(fig.data[0].y) == 10
+
+    def test_custom_n(self, df):
+        fig = build_rep_leaderboard(df, n=5)
+        assert len(fig.data[0].y) == 5
+
+    def test_sorted_ascending_for_horizontal_bar(self, df):
+        fig = build_rep_leaderboard(df)
         revenues = list(fig.data[0].x)
         assert revenues == sorted(revenues)
