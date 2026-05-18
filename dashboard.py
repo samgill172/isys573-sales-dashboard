@@ -141,6 +141,40 @@ def build_top_products(df: pd.DataFrame, n: int = 10) -> go.Figure:
     )
     return fig
 
+def build_rep_leaderboard(df: pd.DataFrame, n: int = 10) -> go.Figure:
+    """Top N sales reps by revenue — horizontal bar chart.
+
+    Args:
+        df: Sales DataFrame with 'sales_rep' and 'revenue' columns.
+        n:  Number of reps to display. Defaults to 10.
+
+    Returns:
+        Plotly Figure with bars sorted ascending (highest rep at top).
+    """
+    top = (
+        df.groupby("sales_rep")["revenue"]
+        .sum()
+        .nlargest(n)
+        .reset_index()
+        .sort_values("revenue", ascending=True)
+    )
+    fig = go.Figure(go.Bar(
+        x=top["revenue"],
+        y=top["sales_rep"],
+        orientation="h",
+        marker_color="#02C39A",
+        hovertemplate="<b>%{y}</b><br>Revenue: $%{x:,.0f}<extra></extra>",
+    ))
+    fig.update_layout(
+        title=f"Top {n} Sales Reps by Revenue",
+        plot_bgcolor="white",
+        xaxis=dict(tickprefix="$", tickformat=",.0f", title="Total Revenue ($)"),
+        yaxis=dict(title="Sales Rep"),
+        showlegend=False,
+        margin=dict(t=50, b=30, l=120),
+    )
+    return fig
+
 
 def kpi_card_html(label: str, value: str, color: str = "#2196F3") -> str:
     """Render a single KPI card as HTML."""
@@ -174,6 +208,7 @@ def build_html(df: pd.DataFrame) -> str:
                 "monthly": empty.to_json(),
                 "category": empty.to_json(),
                 "top_products": empty.to_json(),
+                "rep_leaderboard": empty.to_json(),
                 "total_revenue": "$0",
                 "total_orders": "0",
                 "avg_order": "$0",
@@ -194,10 +229,7 @@ def build_html(df: pd.DataFrame) -> str:
             "monthly":      build_monthly_line(subset).to_json(),
             "category":     build_category_pie(subset).to_json(),
             "top_products": build_top_products(subset).to_json(),
-            "total_revenue": f"${total_rev:,.0f}",
-            "total_orders":  f"{total_orders:,}",
-            "avg_order":     f"${avg_order:,.0f}",
-            "top_region":    top_region,
+            "rep_leaderboard": build_rep_leaderboard(subset).to_json(),
         }
 
     # Serialize all chart data to embed in HTML
@@ -259,11 +291,13 @@ def build_html(df: pd.DataFrame) -> str:
 
 <div class="kpis" id="kpiRow"></div>
 
+
 <div class="charts-grid">
   <div class="chart-card"><div id="chartRegion"  style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartMonthly" style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartCategory"    style="height:340px;"></div></div>
   <div class="chart-card"><div id="chartTopProducts" style="height:340px;"></div></div>
+  <div class="chart-card" style="grid-column:1/-1"><div id="chartRepLeaderboard" style="height:380px;"></div></div>
 </div>
 
 <footer>
@@ -278,6 +312,7 @@ const DATA = {chart_json};
 const KPI_COLORS = ["#2196F3","#4CAF50","#FF9800","#9C27B0"];
 const KPI_LABELS = ["Total Revenue","Transactions","Avg Transaction","Top Region"];
 const KPI_KEYS   = ["total_revenue","total_orders","avg_order","top_region"];
+const KPI_FIELDS = ["total_revenue","total_orders","avg_order","top_region"];
 
 function applyFilter(quarter) {{
   const d = DATA[quarter];
@@ -290,14 +325,15 @@ function applyFilter(quarter) {{
                 border-top:4px solid ${{KPI_COLORS[i]}};flex:1;min-width:150px;">
       <div style="font-size:12px;color:#888;font-weight:600;
                   text-transform:uppercase;letter-spacing:.4px;">${{KPI_LABELS[i]}}</div>
-      <div style="font-size:26px;font-weight:700;color:#1a1a2e;margin-top:5px;">${{d[k]}}</div>
+      <div style="font-size:26px;font-weight:700;color:#1a1a2e;margin-top:5px;">${{d[k] ?? "—"}}</div>
     </div>`).join("");
 
   // Charts
-  Plotly.react("chartRegion",      JSON.parse(d.region).data,      JSON.parse(d.region).layout,      {{responsive:true}});
+Plotly.react("chartRegion",      JSON.parse(d.region).data,      JSON.parse(d.region).layout,      {{responsive:true}});
   Plotly.react("chartMonthly",     JSON.parse(d.monthly).data,     JSON.parse(d.monthly).layout,     {{responsive:true}});
   Plotly.react("chartCategory",    JSON.parse(d.category).data,    JSON.parse(d.category).layout,    {{responsive:true}});
   Plotly.react("chartTopProducts", JSON.parse(d.top_products).data, JSON.parse(d.top_products).layout, {{responsive:true}});
+  Plotly.react("chartRepLeaderboard", JSON.parse(d.rep_leaderboard).data, JSON.parse(d.rep_leaderboard).layout, {{responsive:true}});
 
   document.getElementById("filterLabel").textContent =
     quarter === "Full Year" ? "Showing all 2024 data" : `Showing ${{quarter}} 2024 only`;
