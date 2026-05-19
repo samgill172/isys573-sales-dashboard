@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dashboard import load_data, build_region_bar, build_monthly_line, \
-                      build_category_pie, build_top_products
+                      build_category_pie, build_top_products, build_rep_leaderboard
 
 DATA_PATH = Path(__file__).parent.parent / "data" / "sales.csv"
 
@@ -27,7 +27,8 @@ class TestLoadData:
 
     def test_required_columns_present(self, df):
         required = {"date", "region", "category", "product",
-                    "units_sold", "unit_price", "revenue", "channel"}
+                    "units_sold", "unit_price", "revenue", "channel",
+                    "sales_rep"}
         assert required.issubset(set(df.columns))
 
     def test_date_parsed_as_datetime(self, df):
@@ -58,8 +59,9 @@ class TestRegionChart:
 
     def test_has_four_bars(self, df):
         fig = build_region_bar(df)
-        # px.bar with color creates one trace per region
-        assert len(fig.data) == 4
+        # px.bar with color creates one trace for all regions
+        assert len(fig.data) == 1
+        assert len(fig.data[0].x) == 4
 
     def test_filtered_by_quarter(self, df):
         q1 = df[df["quarter"] == "Q1"]
@@ -109,3 +111,33 @@ class TestTopProducts:
         fig = build_top_products(df)
         revenues = list(fig.data[0].x)
         assert revenues == sorted(revenues)
+
+
+class TestRepLeaderboard:
+    def test_returns_figure(self, df):
+        fig = build_rep_leaderboard(df)
+        assert fig is not None
+
+    def test_ranks_reps_by_revenue(self):
+        sample = pd.DataFrame({
+            "date": pd.to_datetime(["2024-01-10", "2024-01-11", "2024-01-12"]),
+            "region": ["West", "West", "East"],
+            "category": ["A", "A", "B"],
+            "product": ["P1", "P2", "P3"],
+            "units_sold": [1, 1, 1],
+            "unit_price": [100, 100, 200],
+            "revenue": [100.0, 100.0, 200.0],
+            "channel": ["Online", "Online", "Retail"],
+            "sales_rep": ["Alice", "Bob", "Alice"],
+            "quarter": ["Q1", "Q1", "Q1"],
+            "month": ["2024-01", "2024-01", "2024-01"],
+        })
+        fig = build_rep_leaderboard(sample)
+        revenues = list(fig.data[0].x)
+        assert revenues == sorted(revenues)
+        assert revenues[-1] == 300.0
+
+    def test_includes_transaction_counts(self, df):
+        fig = build_rep_leaderboard(df)
+        assert fig.data[0].customdata.shape[1] == 1
+        assert all(int(row[0]) > 0 for row in fig.data[0].customdata)

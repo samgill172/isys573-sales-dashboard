@@ -33,7 +33,8 @@ def load_data(path: Path = DATA_PATH) -> pd.DataFrame:
         raise FileNotFoundError(f"Sales data not found: {path}")
     df = pd.read_csv(path, parse_dates=["date"])
     required = {"date", "region", "category", "product",
-                "units_sold", "unit_price", "revenue", "channel"}
+                "units_sold", "unit_price", "revenue", "channel",
+                "sales_rep"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Missing columns: {missing}")
@@ -142,6 +143,34 @@ def build_top_products(df: pd.DataFrame, n: int = 10) -> go.Figure:
     return fig
 
 
+def build_rep_leaderboard(df: pd.DataFrame) -> go.Figure:
+    """Sales rep leaderboard — total revenue by rep with transaction counts."""
+    reps = (
+        df.groupby("sales_rep")
+        .agg(total_revenue=("revenue", "sum"), transactions=("revenue", "count"))
+        .reset_index()
+        .sort_values(["total_revenue", "transactions"], ascending=[False, False])
+    )
+    chart_data = reps.sort_values("total_revenue")
+    fig = go.Figure(go.Bar(
+        x=chart_data["total_revenue"],
+        y=chart_data["sales_rep"],
+        orientation="h",
+        marker_color="#4CAF50",
+        customdata=chart_data[["transactions"]].values,
+        hovertemplate="<b>%{y}</b><br>Revenue: $%{x:,.0f}<br>Transactions: %{customdata[0]}<extra></extra>",
+    ))
+    fig.update_layout(
+        title="Sales Rep Leaderboard",
+        plot_bgcolor="white",
+        xaxis=dict(tickprefix="$", tickformat=",.0f", title="Total Revenue ($)"),
+        yaxis=dict(title="Sales Rep"),
+        showlegend=False,
+        margin=dict(t=50, b=30, l=120),
+    )
+    return fig
+
+
 def kpi_card_html(label: str, value: str, color: str = "#2196F3") -> str:
     """Render a single KPI card as HTML."""
     return f"""
@@ -189,15 +218,32 @@ def build_html(df: pd.DataFrame) -> str:
             if not subset.empty else "—"
         )
 
+        top_rep = "—"
+        if not subset.empty:
+            top_info = (
+                subset.groupby("sales_rep")["revenue"]
+                .sum()
+                .reset_index()
+                .sort_values("revenue", ascending=False)
+                .iloc[0]
+            )
+            rep_count = subset[subset["sales_rep"] == top_info["sales_rep"]]["revenue"].count()
+            top_rep = (
+                f"{top_info['sales_rep']} · ${top_info['revenue']:,.0f} "
+                f"({rep_count} txns)"
+            )
+
         chart_data[q] = {
-            "region":       build_region_bar(subset).to_json(),
-            "monthly":      build_monthly_line(subset).to_json(),
-            "category":     build_category_pie(subset).to_json(),
-            "top_products": build_top_products(subset).to_json(),
-            "total_revenue": f"${total_rev:,.0f}",
-            "total_orders":  f"{total_orders:,}",
-            "avg_order":     f"${avg_order:,.0f}",
-            "top_region":    top_region,
+            "region":         build_region_bar(subset).to_json(),
+            "monthly":        build_monthly_line(subset).to_json(),
+            "category":       build_category_pie(subset).to_json(),
+            "top_products":   build_top_products(subset).to_json(),
+            "rep_leaderboard": build_rep_leaderboard(subset).to_json(),
+            "total_revenue":  f"${total_rev:,.0f}",
+            "total_orders":   f"{total_orders:,}",
+            "avg_order":      f"${avg_order:,.0f}",
+            "top_region":     top_region,
+            "top_rep":        top_rep,
         }
 
     # Serialize all chart data to embed in HTML
@@ -266,6 +312,21 @@ def build_html(df: pd.DataFrame) -> str:
   <div class="chart-card"><div id="chartTopProducts" style="height:340px;"></div></div>
 </div>
 
+<div style="padding:0 32px 32px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+    <div>
+      <div style="font-size:18px;font-weight:700;color:#1a1a2e;">Sales Rep Leaderboard</div>
+      <div style="font-size:13px;color:#666;margin-top:6px;">
+        Ranked by total revenue with transaction counts.
+      </div>
+    </div>
+    <div id="topRepSummary" style="font-size:14px;font-weight:600;color:#1a1a2e;
+                 min-width:240px;text-align:right;"></div>
+  </div>
+  <div class="chart-card"><div id="chartRepLeaderboard" style="height:420px;"></div></div>
+</div>
+
 <footer>
   Built with Python · Pandas · Plotly &nbsp;|&nbsp;
   ISYS 573 AugOps Demo &nbsp;|&nbsp;
@@ -294,11 +355,13 @@ function applyFilter(quarter) {{
     </div>`).join("");
 
   // Charts
-  Plotly.react("chartRegion",      JSON.parse(d.region).data,      JSON.parse(d.region).layout,      {{responsive:true}});
-  Plotly.react("chartMonthly",     JSON.parse(d.monthly).data,     JSON.parse(d.monthly).layout,     {{responsive:true}});
-  Plotly.react("chartCategory",    JSON.parse(d.category).data,    JSON.parse(d.category).layout,    {{responsive:true}});
-  Plotly.react("chartTopProducts", JSON.parse(d.top_products).data, JSON.parse(d.top_products).layout, {{responsive:true}});
+  Plotly.react("chartRegion",          JSON.parse(d.region).data,          JSON.parse(d.region).layout,          {{responsive:true}});
+  Plotly.react("chartMonthly",         JSON.parse(d.monthly).data,         JSON.parse(d.monthly).layout,         {{responsive:true}});
+  Plotly.react("chartCategory",        JSON.parse(d.category).data,        JSON.parse(d.category).layout,        {{responsive:true}});
+  Plotly.react("chartTopProducts",     JSON.parse(d.top_products).data,     JSON.parse(d.top_products).layout,     {{responsive:true}});
+  Plotly.react("chartRepLeaderboard",  JSON.parse(d.rep_leaderboard).data,  JSON.parse(d.rep_leaderboard).layout,  {{responsive:true}});
 
+  document.getElementById("topRepSummary").textContent = d.top_rep;
   document.getElementById("filterLabel").textContent =
     quarter === "Full Year" ? "Showing all 2024 data" : `Showing ${{quarter}} 2024 only`;
 }}
